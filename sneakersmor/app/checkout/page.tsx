@@ -7,7 +7,9 @@ import { useAuth } from "@/lib/auth-context";
 import { formatoMXN } from "@/lib/format";
 import { CreditCard, Landmark, CheckCircle2 } from "lucide-react";
 
-export default function CheckoutPage() {
+import { Suspense } from "react";
+
+function CheckoutContent() {
   const { items, subtotal, descuento, costoEnvio, total, vaciar } = useCart();
   const { user, addOrder } = useAuth();
   const router = useRouter();
@@ -258,6 +260,14 @@ export default function CheckoutPage() {
         </aside>
       </form>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="p-20 text-center">Cargando...</div>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }
 

@@ -186,7 +186,6 @@ export default function AdminPage() {
                 <tr key={u.email} className="border-b border-ink/5 dark:border-chalk/5">
                   <td className="p-3">
                     {u.nombre}
-                    {u.edad && <span className="ml-2 text-xs text-ink/50 dark:text-chalk/50">({u.edad} años)</span>}
                   </td>
                   <td className="p-3 font-mono text-xs">{u.email}</td>
                   <td className="p-3 font-mono">{u.pedidos}</td>
