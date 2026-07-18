@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply text-ink dark:text-chalk font-body antialiased transition-colors duration-300;
+  background-color: #12141A;
+  background-image: linear-gradient(rgba(18, 20, 26, 0.85), rgba(18, 20, 26, 0.92)), url('/urban-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* Etiqueta de caja de tenis: motivo estructural repetido de la marca.
+   Cada tarjeta de producto, sección y badge se inspira en la etiqueta
+   lateral impresa de una caja de zapatos (barras + SKU + specs). */
+.box-label {
+  @apply relative border border-ink/15 dark:border-chalk/15 bg-stone-soft dark:bg-asphalt-raised;
+  border-radius: 2px;
+}
+
+.box-label::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor 0px,
+    currentColor 2px,
+    transparent 2px,
+    transparent 5px
+  );
+  color: rgb(12 13 16 / 0.25);
+  opacity: 0.35;
+}
+
+.dark .box-label::before {
+  color: rgb(242 240 234 / 0.3);
+}
+
+.sku-tag {
+  @apply font-mono text-[10px] tracking-widest uppercase text-ink/50 dark:text-chalk/50;
+}
+
+::selection {
+  background: #FF5024;
+  color: #F2F0EA;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #FF5024;
+  outline-offset: 3px;
+}
