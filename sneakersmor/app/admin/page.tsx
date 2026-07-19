@@ -23,6 +23,23 @@ export default function AdminPage() {
   const [pedidos, setPedidos] = useState<Order[]>([]);
   const [editando, setEditando] = useState<Product | null>(null);
   const [creando, setCreando] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+
+  const sincronizarStock = async () => {
+    setSincronizando(true);
+    try {
+      const res = await fetch("/api/sync-stock");
+      const data = await res.json();
+      if (data.success) {
+        alert(`¡Sincronización exitosa!\n\nModelos revisados: ${data.productosRevisados}\nTallas agotadas por el proveedor: ${data.variantesAgotadasPorProveedor}`);
+      } else {
+        alert("Error al sincronizar: " + data.error);
+      }
+    } catch (e) {
+      alert("Error de conexión al sincronizar.");
+    }
+    setSincronizando(false);
+  };
 
   useEffect(() => {
     // Escuchar usuarios en tiempo real
@@ -117,7 +134,14 @@ export default function AdminPage() {
 
       {tab === "productos" && (
         <div>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end gap-3 mb-4">
+            <button
+              onClick={sincronizarStock}
+              disabled={sincronizando}
+              className="flex items-center gap-2 border border-ink/15 dark:border-chalk/15 px-4 h-10 font-mono text-xs uppercase tracking-widest hover:border-ember transition-colors disabled:opacity-50"
+            >
+              {sincronizando ? "Sincronizando..." : "Sincronizar Stock (Airfire)"}
+            </button>
             <button
               onClick={() => setCreando(true)}
               className="flex items-center gap-2 bg-ember text-chalk px-4 h-10 font-mono text-xs uppercase tracking-widest"
