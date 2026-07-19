@@ -38,15 +38,15 @@ export default function AuthModal({
     setError("");
 
     if (mode === "login") {
-      const success = await login(email, password);
+      const { success, error: authError } = await login(email, password);
       if (success) {
         onClose();
       } else {
-        setError("Correo o contraseña incorrectos.");
+        setError(authError || "Correo o contraseña incorrectos.");
       }
     } else {
       if (nombre && email && edad && password) {
-        const success = await register({
+        const { success, error: authError } = await register({
           id: String(Date.now()),
           name: nombre,
           email,
@@ -56,7 +56,17 @@ export default function AuthModal({
         if (success) {
           onClose();
         } else {
-          setError("El correo ya está registrado o hubo un error.");
+          // Firebase suele regresar errores en inglés como "Firebase: Error (auth/email-already-in-use)."
+          // Filtramos un poco para que sea más amigable o mostramos el original.
+          let errorMsg = authError || "Hubo un error al registrar.";
+          if (authError?.includes("email-already-in-use")) {
+            errorMsg = "Este correo ya está registrado. Intenta iniciar sesión.";
+          } else if (authError?.includes("weak-password")) {
+            errorMsg = "La contraseña debe tener al menos 6 caracteres.";
+          } else if (authError?.includes("operation-not-allowed")) {
+            errorMsg = "El inicio de sesión por correo no está activado en tu Firebase.";
+          }
+          setError(errorMsg);
         }
       }
     }

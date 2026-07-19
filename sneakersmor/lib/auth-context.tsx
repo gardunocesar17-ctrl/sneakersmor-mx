@@ -34,11 +34,16 @@ export interface User {
   age: string;
 }
 
+interface AuthResult {
+  success: boolean;
+  error?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   orders: Order[];
-  login: (email: string, password?: string) => Promise<boolean>;
-  register: (user: User, password?: string) => Promise<boolean>;
+  login: (email: string, password?: string) => Promise<AuthResult>;
+  register: (user: User, password?: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   addOrder: (order: Order) => Promise<void>;
   loading: boolean;
@@ -84,20 +89,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password?: string): Promise<AuthResult> => {
     try {
-      if (!password) return false;
+      if (!password) return { success: false, error: "Contraseña requerida" };
       await signInWithEmailAndPassword(auth, email, password);
-      return true;
-    } catch (e) {
+      return { success: true };
+    } catch (e: any) {
       console.error("Error en login:", e);
-      return false;
+      return { success: false, error: e.message };
     }
   };
 
-  const register = async (newUser: User, password?: string) => {
+  const register = async (newUser: User, password?: string): Promise<AuthResult> => {
     try {
-      if (!password) return false;
+      if (!password) return { success: false, error: "Contraseña requerida" };
       const res = await createUserWithEmailAndPassword(auth, newUser.email, password);
       
       await setDoc(doc(db, "users", res.user.uid), {
@@ -107,10 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         age: newUser.age
       });
       
-      return true;
-    } catch (e) {
+      return { success: true };
+    } catch (e: any) {
       console.error("Error en registro:", e);
-      return false;
+      return { success: false, error: e.message };
     }
   };
 
