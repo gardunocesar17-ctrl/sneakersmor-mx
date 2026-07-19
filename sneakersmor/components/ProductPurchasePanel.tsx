@@ -6,20 +6,16 @@ import { formatoMXN } from "@/lib/format";
 import { useCart } from "@/lib/cart-context";
 import { Truck, ShieldCheck, PackageCheck } from "lucide-react";
 
+import { useStock } from "@/lib/useStock";
+
 export default function ProductPurchasePanel({ producto }: { producto: Product }) {
   const [talla, setTalla] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
   const [error, setError] = useState("");
-  const [purchased, setPurchased] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    try {
-      setPurchased(JSON.parse(localStorage.getItem("purchased_inventory") || "{}"));
-    } catch (e) {}
-  }, []);
+  const { getRealStock: getGlobalStock } = useStock();
 
   const getRealStock = (tallaStr: string, originalStock: number) => {
-    return Math.max(0, originalStock - (purchased[`${producto.id}-${tallaStr}`] || 0));
+    return getGlobalStock(producto.id, tallaStr, originalStock);
   };
 
   const originalStockTalla = producto.tallas.find((t) => t.talla === talla)?.stock ?? 0;

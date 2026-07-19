@@ -5,19 +5,9 @@ import { productos as productosIniciales } from "@/lib/data";
 import { Product } from "@/lib/types";
 import { formatoMXN } from "@/lib/format";
 import { LayoutDashboard, Package, ShoppingCart, Users, Plus, Pencil, Trash2, X } from "lucide-react";
-
-const pedidosMuestra = [
-  { id: "SM-1042", cliente: "Karla Ramírez", total: 2799, estado: "Enviado", fecha: "2026-07-15" },
-  { id: "SM-1041", cliente: "Iván Morales", total: 5398, estado: "Procesando", fecha: "2026-07-15" },
-  { id: "SM-1040", cliente: "Dana Pérez", total: 1999, estado: "Entregado", fecha: "2026-07-14" },
-  { id: "SM-1039", cliente: "Sergio López", total: 2399, estado: "Entregado", fecha: "2026-07-13" },
-];
-
-const usuariosMuestra = [
-  { nombre: "Karla Ramírez", email: "karla@example.com", pedidos: 3, tipo: "Menudeo" },
-  { nombre: "Iván Morales", email: "ivan@example.com", pedidos: 12, tipo: "Mayoreo" },
-  { nombre: "Dana Pérez", email: "dana@example.com", pedidos: 1, tipo: "Menudeo" },
-];
+import { collection, onSnapshot, doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Order, User } from "@/lib/auth-context";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -29,21 +19,31 @@ const tabs = [
 export default function AdminPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("dashboard");
   const [productos, setProductos] = useState<Product[]>(productosIniciales);
-  const [usuarios, setUsuarios] = useState(usuariosMuestra);
+  const [usuarios, setUsuarios] = useState<User[]>([]);
+  const [pedidos, setPedidos] = useState<Order[]>([]);
   const [editando, setEditando] = useState<Product | null>(null);
   const [creando, setCreando] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("registeredUsers");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setUsuarios([...parsed, ...usuariosMuestra]);
-      } catch (e) {}
-    }
+    // Escuchar usuarios en tiempo real
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+      setUsuarios(snap.docs.map((d) => d.data() as User));
+    });
+
+    // Escuchar pedidos en tiempo real
+    const unsubOrders = onSnapshot(collection(db, "orders"), (snap) => {
+      const p = snap.docs.map((d) => d.data() as Order);
+      p.sort((a, b) => Number(b.id) - Number(a.id));
+      setPedidos(p);
+    });
+
+    return () => {
+      unsubUsers();
+      unsubOrders();
+    };
   }, []);
 
-  const totalVentas = pedidosMuestra.reduce((acc, p) => acc + p.total, 0);
+  const totalVentas = pedidos.filter((p) => p.status !== "Cancelado").reduce((acc, p) => acc + p.total, 0);
   const totalInventario = productos.reduce((acc, p) => acc + p.tallas.reduce((s, t) => s + t.stock, 0), 0);
 
   const guardarProducto = (producto: Product) => {
@@ -59,13 +59,35 @@ export default function AdminPage() {
     setProductos((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const cambiarEstadoPedido = async (pedido: Order, nuevoEstado: string) => {
+    try {
+      // Deducir stock si pasa a Confirmado y era transferencia (o si era en proceso)
+      if (pedido.metodoPago === "transferencia" && nuevoEstado === "Confirmado" && pedido.status !== "Confirmado") {
+        const invRef = doc(db, "store", "inventory");
+        const invSnap = await getDoc(invRef);
+        const purchased = invSnap.exists() ? invSnap.data() : {};
+        pedido.items.forEach((item) => {
+          const key = `${item.productId}-${item.talla}`;
+          purchased[key] = (purchased[key] || 0) + item.cantidad;
+        });
+        await setDoc(invRef, purchased);
+      }
+      
+      // Actualizar estado en Firestore
+      await updateDoc(doc(db, "orders", pedido.id), { status: nuevoEstado });
+    } catch (error) {
+      console.error("Error al actualizar estado del pedido", error);
+      alert("Hubo un error al actualizar el estado");
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-10">
       <div className="mb-8">
         <p className="sku-tag mb-1">Panel administrador</p>
         <h1 className="font-display text-3xl">SneakersMor.MX</h1>
         <p className="text-xs text-ink/50 dark:text-chalk/50 mt-1">
-          Los cambios aquí son locales a esta sesión (datos de muestra). Conecta la base de datos real para persistirlos — ver README.
+          Panel conectado a Firebase. Administra tus usuarios, pedidos e inventario en tiempo real.
         </p>
       </div>
 
@@ -75,7 +97,9 @@ export default function AdminPage() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-4 h-10 font-mono text-xs uppercase tracking-widest border shrink-0 ${
-              tab === t.id ? "bg-ink text-chalk dark:bg-chalk dark:text-ink border-ink dark:border-chalk" : "border-ink/15 dark:border-chalk/15"
+              tab === t.id
+                ? "bg-ink text-chalk dark:bg-chalk dark:text-ink border-ink dark:border-chalk"
+                : "border-ink/15 dark:border-chalk/15"
             }`}
           >
             <t.icon size={14} /> {t.label}
@@ -85,9 +109,9 @@ export default function AdminPage() {
 
       {tab === "dashboard" && (
         <div className="grid sm:grid-cols-3 gap-4">
-          <Metrica etiqueta="Ventas (muestra)" valor={formatoMXN(totalVentas)} />
+          <Metrica etiqueta="Ventas Totales (Reales)" valor={formatoMXN(totalVentas)} />
           <Metrica etiqueta="Productos activos" valor={String(productos.length)} />
-          <Metrica etiqueta="Piezas en inventario" valor={String(totalInventario)} />
+          <Metrica etiqueta="Pedidos registrados" valor={String(pedidos.length)} />
         </div>
       )}
 
@@ -109,7 +133,7 @@ export default function AdminPage() {
                   <th className="p-3">Nombre</th>
                   <th className="p-3">Marca</th>
                   <th className="p-3">Precio</th>
-                  <th className="p-3">Stock total</th>
+                  <th className="p-3">Stock original</th>
                   <th className="p-3"></th>
                 </tr>
               </thead>
@@ -148,23 +172,45 @@ export default function AdminPage() {
                 <th className="p-3">Cliente</th>
                 <th className="p-3">Fecha</th>
                 <th className="p-3">Total</th>
+                <th className="p-3">Método</th>
                 <th className="p-3">Estado</th>
               </tr>
             </thead>
             <tbody>
-              {pedidosMuestra.map((p) => (
+              {pedidos.map((p) => (
                 <tr key={p.id} className="border-b border-ink/5 dark:border-chalk/5">
                   <td className="p-3 font-mono text-xs">{p.id}</td>
-                  <td className="p-3">{p.cliente}</td>
-                  <td className="p-3 font-mono text-xs">{p.fecha}</td>
+                  <td className="p-3 font-mono text-xs">{p.userEmail || "Anónimo"}</td>
+                  <td className="p-3 font-mono text-xs">{p.date}</td>
                   <td className="p-3 font-mono">{formatoMXN(p.total)}</td>
+                  <td className="p-3 font-mono text-[10px] uppercase">{p.metodoPago}</td>
                   <td className="p-3">
-                    <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 bg-jungle/10 text-jungle-bright">
-                      {p.estado}
-                    </span>
+                    <select
+                      value={p.status}
+                      onChange={(e) => cambiarEstadoPedido(p, e.target.value)}
+                      className={`font-mono text-[10px] uppercase tracking-widest px-2 py-1 outline-none appearance-none cursor-pointer border-none ${
+                        p.status === "Confirmado" ? "bg-jungle/10 text-jungle-bright" :
+                        p.status === "En proceso" ? "bg-ember/10 text-ember" :
+                        p.status === "Cancelado" ? "bg-ink/10 text-ink/50" :
+                        "bg-ink/5 dark:bg-chalk/5"
+                      }`}
+                    >
+                      <option value="En proceso">En proceso</option>
+                      <option value="Confirmado">Confirmado</option>
+                      <option value="Enviado">Enviado</option>
+                      <option value="Entregado">Entregado</option>
+                      <option value="Cancelado">Cancelado</option>
+                    </select>
                   </td>
                 </tr>
               ))}
+              {pedidos.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-ink/50 dark:text-chalk/50">
+                    Aún no hay pedidos registrados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -177,25 +223,24 @@ export default function AdminPage() {
               <tr className="border-b border-ink/10 dark:border-chalk/10 text-left font-mono text-[10px] uppercase tracking-widest text-ink/50 dark:text-chalk/50">
                 <th className="p-3">Nombre</th>
                 <th className="p-3">Correo</th>
-                <th className="p-3">Pedidos</th>
-                <th className="p-3">Tipo de cliente</th>
+                <th className="p-3">Edad</th>
               </tr>
             </thead>
             <tbody>
               {usuarios.map((u) => (
                 <tr key={u.email} className="border-b border-ink/5 dark:border-chalk/5">
-                  <td className="p-3">
-                    {u.nombre}
-                  </td>
+                  <td className="p-3">{u.name}</td>
                   <td className="p-3 font-mono text-xs">{u.email}</td>
-                  <td className="p-3 font-mono">{u.pedidos}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 text-[10px] uppercase font-mono tracking-widest ${u.tipo === 'Nuevo Registro' ? 'bg-ember/10 text-ember' : 'bg-ink/5 dark:bg-chalk/5'}`}>
-                      {u.tipo}
-                    </span>
-                  </td>
+                  <td className="p-3 font-mono">{u.age}</td>
                 </tr>
               ))}
+              {usuarios.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="p-4 text-center text-ink/50 dark:text-chalk/50">
+                    Aún no hay usuarios registrados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

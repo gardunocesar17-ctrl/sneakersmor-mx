@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "firebase": "^12.16.0",
     "framer-motion": "^11.3.0",
     "lucide-react": "^0.408.0",
     "mercadopago": "^3.2.0",

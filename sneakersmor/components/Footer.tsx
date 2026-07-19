@@ -93,7 +93,6 @@ export default function Footer() {
             <ul className="space-y-2 text-sm">
               <li><Link href="/checkout" className="hover:text-ember">Envíos</Link></li>
               <li><Link href="/cambios" className="hover:text-ember">Cambios</Link></li>
-              <li><Link href="/admin" className="hover:text-ember">Panel administrador</Link></li>
             </ul>
           </div>
           <div>

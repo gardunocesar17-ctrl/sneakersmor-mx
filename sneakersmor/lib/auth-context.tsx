@@ -1,6 +1,21 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  getDocs, 
+  query, 
+  where 
+} from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 export interface Order {
   id: string;
@@ -9,6 +24,7 @@ export interface Order {
   total: number;
   status: string;
   metodoPago: string;
+  userEmail?: string;
 }
 
 export interface User {
@@ -16,16 +32,16 @@ export interface User {
   name: string;
   email: string;
   age: string;
-  password?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   orders: Order[];
-  login: (email: string, password?: string) => boolean;
-  register: (user: User) => boolean;
-  logout: () => void;
-  addOrder: (order: Order) => void;
+  login: (email: string, password?: string) => Promise<boolean>;
+  register: (user: User, password?: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  addOrder: (order: Order) => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,93 +49,94 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Load from local storage on mount
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem("auth_user");
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        
-        const allOrdersStr = localStorage.getItem("auth_orders") || "{}";
-        const allOrders = JSON.parse(allOrdersStr);
-        setOrders(allOrders[parsedUser.email] || []);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Obtener usuario
+          const userQuery = query(collection(db, "users"), where("email", "==", firebaseUser.email));
+          const userSnapshot = await getDocs(userQuery);
+          
+          if (!userSnapshot.empty) {
+            setUser(userSnapshot.docs[0].data() as User);
+          } else {
+            setUser({ id: firebaseUser.uid, name: firebaseUser.displayName || "Usuario", email: firebaseUser.email!, age: "" });
+          }
+
+          // Obtener pedidos
+          const ordersQuery = query(collection(db, "orders"), where("userEmail", "==", firebaseUser.email));
+          const ordersSnapshot = await getDocs(ordersQuery);
+          const userOrders = ordersSnapshot.docs.map(doc => doc.data() as Order);
+          userOrders.sort((a, b) => Number(b.id) - Number(a.id));
+          setOrders(userOrders);
+        } catch (error) {
+          console.error("Error cargando datos de Firebase", error);
+        }
+      } else {
+        setUser(null);
+        setOrders([]);
       }
-    } catch (e) {
-      console.error("Error parsing auth state", e);
-    }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = (email: string, password?: string) => {
+  const login = async (email: string, password?: string) => {
     try {
-      const usersStr = localStorage.getItem("auth_users") || "[]";
-      const users: User[] = JSON.parse(usersStr);
-      
-      const found = users.find(u => u.email === email && u.password === password);
-      if (found) {
-        setUser(found);
-        localStorage.setItem("auth_user", JSON.stringify(found));
-        
-        const allOrdersStr = localStorage.getItem("auth_orders") || "{}";
-        const allOrders = JSON.parse(allOrdersStr);
-        setOrders(allOrders[found.email] || []);
-        
-        return true;
-      }
-      return false;
+      if (!password) return false;
+      await signInWithEmailAndPassword(auth, email, password);
+      return true;
     } catch (e) {
+      console.error("Error en login:", e);
       return false;
     }
   };
 
-  const register = (newUser: User) => {
+  const register = async (newUser: User, password?: string) => {
     try {
-      const usersStr = localStorage.getItem("auth_users") || "[]";
-      const users: User[] = JSON.parse(usersStr);
+      if (!password) return false;
+      const res = await createUserWithEmailAndPassword(auth, newUser.email, password);
       
-      if (users.some(u => u.email === newUser.email)) {
-        return false; // Email ya existe
-      }
-      
-      const updatedUsers = [...users, newUser];
-      localStorage.setItem("auth_users", JSON.stringify(updatedUsers));
-      
-      setUser(newUser);
-      localStorage.setItem("auth_user", JSON.stringify(newUser));
-      setOrders([]);
+      await setDoc(doc(db, "users", res.user.uid), {
+        id: res.user.uid,
+        name: newUser.name,
+        email: newUser.email,
+        age: newUser.age
+      });
       
       return true;
     } catch (e) {
+      console.error("Error en registro:", e);
       return false;
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setOrders([]);
-    localStorage.removeItem("auth_user");
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const addOrder = (order: Order) => {
+  const addOrder = async (order: Order) => {
     if (!user) return;
     
-    const newOrders = [order, ...orders];
-    setOrders(newOrders);
+    const newOrder = { ...order, userEmail: user.email };
+    setOrders(prev => [newOrder, ...prev]);
     
     try {
-      const allOrdersStr = localStorage.getItem("auth_orders") || "{}";
-      const allOrders = JSON.parse(allOrdersStr);
-      
-      allOrders[user.email] = newOrders;
-      localStorage.setItem("auth_orders", JSON.stringify(allOrders));
+      await setDoc(doc(db, "orders", order.id), newOrder);
     } catch (e) {
-      console.error("Error guardando orden", e);
+      console.error("Error guardando orden en Firebase", e);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, orders, login, register, logout, addOrder }}>
+    <AuthContext.Provider value={{ user, orders, login, register, logout, addOrder, loading }}>
       {children}
     </AuthContext.Provider>
   );

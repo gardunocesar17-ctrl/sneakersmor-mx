@@ -101,24 +101,6 @@ export default function PerfilPage() {
         </div>
       )}
 
-      {/* Botón de desarrollador para limpiar pruebas */}
-      <div className="mt-16 pt-8 border-t border-ember/20 text-center">
-        <p className="text-xs text-ink/40 dark:text-chalk/40 mb-3">
-          ¿Hiciste pruebas y quieres regresar los productos al stock original?
-        </p>
-        <button 
-          onClick={() => {
-            if(confirm("¿Seguro que quieres borrar todo el historial de pedidos y devolver el stock a la normalidad?")) {
-              localStorage.removeItem("sneakersmor_orders");
-              localStorage.removeItem("purchased_inventory");
-              window.location.reload();
-            }
-          }}
-          className="bg-transparent border border-ember text-ember px-4 py-2 font-mono text-[10px] uppercase tracking-widest hover:bg-ember hover:text-chalk transition-colors"
-        >
-          Resetear datos de prueba
-        </button>
-      </div>
     </div>
   );
 }

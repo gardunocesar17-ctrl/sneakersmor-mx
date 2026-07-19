@@ -33,12 +33,12 @@ export default function AuthModal({
     }
   }, [isOpen, defaultMode]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
     if (mode === "login") {
-      const success = login(email, password);
+      const success = await login(email, password);
       if (success) {
         onClose();
       } else {
@@ -46,23 +46,17 @@ export default function AuthModal({
       }
     } else {
       if (nombre && email && edad && password) {
-        const success = register({
+        const success = await register({
           id: String(Date.now()),
           name: nombre,
           email,
-          age: edad,
-          password
-        });
+          age: edad
+        }, password);
         
         if (success) {
-          // Guardar en administradores / registros (simulación legacy panel)
-          const newUserLegacy = { nombre, email, edad, pedidos: 0, tipo: "Nuevo Registro" };
-          const existing = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
-          localStorage.setItem("registeredUsers", JSON.stringify([newUserLegacy, ...existing]));
-          
           onClose();
         } else {
-          setError("El correo ya está registrado.");
+          setError("El correo ya está registrado o hubo un error.");
         }
       }
     }

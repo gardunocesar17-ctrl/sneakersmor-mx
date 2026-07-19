@@ -7,18 +7,12 @@ import { formatoMXN } from "@/lib/format";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
+import { useStock } from "@/lib/useStock";
+
 export default function ProductCard({ producto, index = 0 }: { producto: Product; index?: number }) {
-  const [purchased, setPurchased] = useState<Record<string, number>>({});
+  const { getRealStock } = useStock();
 
-  useEffect(() => {
-    try {
-      setPurchased(JSON.parse(localStorage.getItem("purchased_inventory") || "{}"));
-    } catch (e) {}
-  }, []);
-
-  const totalOriginalStock = producto.tallas.reduce((acc, t) => acc + t.stock, 0);
-  const totalPurchased = producto.tallas.reduce((acc, t) => acc + (purchased[`${producto.id}-${t.talla}`] || 0), 0);
-  const realStock = Math.max(0, totalOriginalStock - totalPurchased);
+  const realStock = producto.tallas.reduce((acc, t) => acc + getRealStock(producto.id, t.talla, t.stock), 0);
 
   return (
     <motion.div

@@ -6,6 +6,8 @@ import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { formatoMXN } from "@/lib/format";
 import { CreditCard, Landmark, CheckCircle2 } from "lucide-react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Suspense } from "react";
 
@@ -45,20 +47,27 @@ function CheckoutContent() {
         date: new Date().toLocaleDateString("es-MX", { year: 'numeric', month: 'long', day: 'numeric' }),
         items: [...items],
         total,
-        status: "Aprobado",
+        status: metodo === "mercadopago" ? "Aprobado" : "En proceso",
         metodoPago: metodo
       });
 
-      // Deducir inventario
-      try {
-        const purchased = JSON.parse(localStorage.getItem("purchased_inventory") || "{}");
-        items.forEach((item) => {
-          const key = `${item.productId}-${item.talla}`;
-          purchased[key] = (purchased[key] || 0) + item.cantidad;
-        });
-        localStorage.setItem("purchased_inventory", JSON.stringify(purchased));
-      } catch (e) {
-        console.error("Error al descontar inventario", e);
+      // Deducir inventario SOLO si es mercadopago (transferencia no deduce hasta confirmar)
+      if (metodo === "mercadopago") {
+        const updateStock = async () => {
+          try {
+            const invRef = doc(db, "store", "inventory");
+            const invSnap = await getDoc(invRef);
+            const purchased = invSnap.exists() ? invSnap.data() : {};
+            items.forEach((item) => {
+              const key = `${item.productId}-${item.talla}`;
+              purchased[key] = (purchased[key] || 0) + item.cantidad;
+            });
+            await setDoc(invRef, purchased);
+          } catch (e) {
+            console.error("Error al descontar inventario", e);
+          }
+        };
+        updateStock();
       }
     }
   };
@@ -119,7 +128,7 @@ function CheckoutContent() {
     return (
       <div className="max-w-2xl mx-auto px-4 md:px-6 py-20 text-center">
         <CheckCircle2 size={48} className="mx-auto text-jungle-bright mb-4" />
-        <h1 className="font-display text-3xl mb-2">Pedido confirmado</h1>
+        <h1 className="font-display text-3xl mb-2">{isMercadoPago ? "Pedido confirmado" : "Pedido en proceso"}</h1>
         
         {isMercadoPago ? (
           <p className="text-sm text-ink/60 dark:text-chalk/60 mb-8">
