@@ -26,38 +26,84 @@ export default function AdminPage() {
   const [sincronizando, setSincronizando] = useState(false);
 
   const sincronizarStock = async () => {
+    if (!confirm("Esto sincronizará el stock conectándose a Airfire desde tu navegador para evitar bloqueos. ¿Continuar?")) return;
     setSincronizando(true);
-    let offset = 0;
-    let totalRevisados = 0;
-    let totalAgotadas = 0;
-    
-    while(true) {
-      try {
-        const res = await fetch(`/api/sync-stock?offset=${offset}`);
-        const data = await res.json();
+    try {
+      const pagesPromises = [1, 2, 3].map(page => 
+        fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      );
+      const pages = await Promise.all(pagesPromises);
+      const allAirfireProducts = pages.filter(p => p && p.products).flatMap(p => p.products);
+      
+      const invRef = doc(db, "store", "inventory");
+      const invSnap = await getDoc(invRef);
+      const purchased = invSnap.exists() ? invSnap.data() : {};
+      
+      let actualizadosCount = 0;
+      let totalRevisados = 0;
+
+      const batchSize = 10;
+      for (let i = 0; i < productos.length; i += batchSize) {
+        const batch = productos.slice(i, i + batchSize);
+        totalRevisados += batch.length;
         
-        if (data.success) {
-          totalRevisados += data.productosRevisados;
-          totalAgotadas += data.variantesAgotadasPorProveedor; // Note: This includes unavailable sizes from the whole DB on every pass, but that's fine for the alert.
+        await Promise.all(batch.map(async (localProduct) => {
+          const airfireProduct = allAirfireProducts.find((p: any) => p.handle === localProduct.slug);
           
-          if (data.isFinished) {
-            break;
+          if (!airfireProduct) {
+            localProduct.tallas.forEach((t) => {
+              purchased[`${localProduct.id}-${t.talla}`] = t.stock;
+              actualizadosCount++;
+            });
+            return;
           }
-          offset = data.nextOffset;
-        } else {
-          alert("Error al sincronizar: " + data.error);
-          setSincronizando(false);
-          return;
-        }
-      } catch (e) {
-        alert("Error de conexión al sincronizar.");
-        setSincronizando(false);
-        return;
+
+          let needsScraping = false;
+          localProduct.tallas.forEach((t) => {
+            const variant = airfireProduct.variants.find((v: any) => v.title === t.talla || v.option1 === t.talla);
+            if (!variant || !variant.available) {
+              purchased[`${localProduct.id}-${t.talla}`] = t.stock;
+              actualizadosCount++;
+            } else {
+              needsScraping = true;
+            }
+          });
+
+          if (needsScraping) {
+            try {
+              const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`);
+              if (!res.ok) return;
+              const html = await res.text();
+              const invRegex = /"(\d+)":\s*\{\s*"inventory_management"[^}]+"inventory_quantity":\s*(-?\d+)/g;
+              let invMatch;
+              const scrapedInv: Record<string, number> = {};
+              while ((invMatch = invRegex.exec(html)) !== null) {
+                scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
+              }
+              localProduct.tallas.forEach((t) => {
+                const variant = airfireProduct.variants.find((v: any) => v.title === t.talla || v.option1 === t.talla);
+                if (variant && variant.available) {
+                  const exactStock = scrapedInv[variant.id] !== undefined ? Math.max(0, scrapedInv[variant.id]) : 1;
+                  purchased[`${localProduct.id}-${t.talla}`] = t.stock - exactStock;
+                  actualizadosCount++;
+                }
+              });
+            } catch (e) {
+              console.error(`Error HTML ${localProduct.slug}`, e);
+            }
+          }
+        }));
       }
+
+      await setDoc(invRef, purchased);
+      alert(`¡Sincronización exitosa!\n\nModelos revisados: ${totalRevisados}\nTallas actualizadas: ${actualizadosCount}`);
+    } catch (e) {
+      alert("Error de conexión al sincronizar.");
+    } finally {
+      setSincronizando(false);
     }
-    
-    alert(`¡Sincronización exitosa!\n\nModelos revisados: ${totalRevisados}\nTallas agotadas por el proveedor actualizadas en BD.`);
-    setSincronizando(false);
   };
 
   useEffect(() => {
