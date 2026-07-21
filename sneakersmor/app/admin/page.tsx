@@ -29,13 +29,36 @@ export default function AdminPage() {
     if (!confirm("Esto sincronizará el stock conectándose a Airfire desde tu navegador para evitar bloqueos. ¿Continuar?")) return;
     setSincronizando(true);
     try {
-      const pagesPromises = [1, 2, 3].map(page => 
-        fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      );
-      const pages = await Promise.all(pagesPromises);
-      const allAirfireProducts = pages.filter(p => p && p.products).flatMap(p => p.products);
+      const allAirfireProducts: any[] = [];
+      for (let page = 1; page <= 10; page++) {
+        try {
+          const res = await fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.products && data.products.length > 0) {
+              allAirfireProducts.push(...data.products);
+            } else {
+              break; // No more pages
+            }
+          } else {
+            alert(`Error de Shopify al cargar la página ${page}. Por favor, inténtalo de nuevo en 1 minuto.`);
+            setSincronizando(false);
+            return;
+          }
+        } catch (e) {
+          console.error("Error fetching page", page, e);
+          alert(`Error de red al cargar la página ${page}. Por favor, inténtalo de nuevo en 1 minuto.`);
+          setSincronizando(false);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 1000)); // Evitar bloqueos de Shopify
+      }
+      
+      if (allAirfireProducts.length === 0) {
+        alert("No se pudo obtener ningún producto de Airfire. Inténtalo de nuevo más tarde.");
+        setSincronizando(false);
+        return;
+      }
       
       const invRef = doc(db, "store", "inventory");
       const purchased: Record<string, number> = {};
