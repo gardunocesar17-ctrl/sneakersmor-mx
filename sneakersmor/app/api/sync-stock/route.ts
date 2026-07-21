@@ -66,7 +66,7 @@ export async function GET() {
       }
     });
 
-    // 2. Ahora SOLO raspamos el HTML de los que SÍ tienen stock, en lotes de 10
+    // 2. Ahora SOLO raspamos el HTML de los que SÍ tienen stock, en lotes de 15
     const chunkSize = 15;
     for (let i = 0; i < productsToScrape.length; i += chunkSize) {
       const chunk = productsToScrape.slice(i, i + chunkSize);
@@ -77,29 +77,28 @@ export async function GET() {
           if (!res.ok) return;
           const html = await res.text();
           
-          const metaMatch = html.match(/var meta = (\{.*?\});/s);
-          if (metaMatch) {
-            const meta = JSON.parse(metaMatch[1]);
-            const variants = meta.product?.variants || [];
-            
-            const invRegex = /"(\d+)":\s*\{\s*"inventory_management"[^}]+"inventory_quantity":\s*(-?\d+)/g;
-            let invMatch;
-            const scrapedInv: Record<string, number> = {};
-            while ((invMatch = invRegex.exec(html)) !== null) {
-              scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
-            }
-
-            localProduct.tallas.forEach((tallaObj: any) => {
-              const key = `${localProduct.id}-${tallaObj.talla}`;
-              const variant = variants.find((v: any) => v.public_title === tallaObj.talla || v.name?.includes(tallaObj.talla) || v.option1 === tallaObj.talla);
-              
-              if (variant && scrapedInv[variant.id] !== undefined) {
-                const exactStock = Math.max(0, scrapedInv[variant.id]);
-                purchased[key] = tallaObj.stock - exactStock;
-                actualizadosCount++;
-              }
-            });
+          const airfireProduct = allAirfireProducts.find(p => p.handle === localProduct.slug);
+          if (!airfireProduct) return;
+          const variants = airfireProduct.variants;
+          
+          const invRegex = /"(\d+)":\s*\{\s*"inventory_management"[^}]+"inventory_quantity":\s*(-?\d+)/g;
+          let invMatch;
+          const scrapedInv: Record<string, number> = {};
+          while ((invMatch = invRegex.exec(html)) !== null) {
+            scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
           }
+
+          localProduct.tallas.forEach((tallaObj: any) => {
+            const key = `${localProduct.id}-${tallaObj.talla}`;
+            const variant = variants.find((v: any) => v.title === tallaObj.talla || v.option1 === tallaObj.talla);
+            
+            if (variant && variant.available) {
+              // Si la pudimos raspar, usamos el número exacto. Si falló el scrapeo por algún motivo, asumimos que al menos hay 1 (ya que available = true)
+              const exactStock = scrapedInv[variant.id] !== undefined ? Math.max(0, scrapedInv[variant.id]) : 1;
+              purchased[key] = tallaObj.stock - exactStock;
+              actualizadosCount++;
+            }
+          });
         } catch (e) {
           console.error(`Error procesando ${localProduct.slug}:`, e);
         }
@@ -112,8 +111,8 @@ export async function GET() {
       success: true, 
       message: "Inventario sincronizado con éxito",
       productosTotales: productos.length,
-      productosRaspados: productsToScrape.length,
-      variantesSincronizadas: actualizadosCount
+      productosRevisados: productsToScrape.length,
+      variantesAgotadasPorProveedor: actualizadosCount
     });
   } catch (error: any) {
     console.error("Error sincronizando stock:", error);
