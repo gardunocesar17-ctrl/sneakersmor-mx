@@ -4,7 +4,10 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { productos } from "@/lib/data";
 
-export async function GET() {
+export const dynamic = 'force-dynamic'; // EVITA QUE VERCEL CACHEE ESTA RUTA
+export const maxDuration = 60; // Para Vercel Pro (no afecta en hobby, pero ayuda si tienen pro)
+
+export async function GET(request: Request) {
   try {
     const invRef = doc(db, "store", "inventory");
     const invSnap = await getDoc(invRef);
@@ -17,7 +20,7 @@ export async function GET() {
 
     // 1. Obtenemos TODOS los productos rápidamente desde el JSON (tarda < 1 segundo)
     while (hasMore && page <= 20) {
-      const res = await fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`);
+      const res = await fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`, { cache: 'no-store' });
       if (!res.ok) break;
       const data = await res.json();
       if (data.products && data.products.length > 0) {
@@ -73,7 +76,7 @@ export async function GET() {
       
       await Promise.all(chunk.map(async (localProduct: any) => {
         try {
-          const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`);
+          const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`, { cache: 'no-store' });
           if (!res.ok) return;
           const html = await res.text();
           
