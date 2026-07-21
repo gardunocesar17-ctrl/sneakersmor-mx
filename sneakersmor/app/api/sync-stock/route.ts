@@ -33,12 +33,12 @@ export async function GET() {
     const productsToScrape: any[] = [];
     
     // Primero, cruzamos el catálogo rápido
-    productos.forEach(localProduct => {
+    productos.forEach((localProduct: any) => {
       const airfireProduct = allAirfireProducts.find(p => p.handle === localProduct.slug);
       
       let needsScraping = false;
       
-      localProduct.tallas.forEach(tallaObj => {
+      localProduct.tallas.forEach((tallaObj: any) => {
         const key = `${localProduct.id}-${tallaObj.talla}`;
         
         if (airfireProduct) {
@@ -71,7 +71,7 @@ export async function GET() {
     for (let i = 0; i < productsToScrape.length; i += chunkSize) {
       const chunk = productsToScrape.slice(i, i + chunkSize);
       
-      await Promise.all(chunk.map(async (localProduct) => {
+      await Promise.all(chunk.map(async (localProduct: any) => {
         try {
           const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`);
           if (!res.ok) return;
@@ -89,7 +89,7 @@ export async function GET() {
               scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
             }
 
-            localProduct.tallas.forEach(tallaObj => {
+            localProduct.tallas.forEach((tallaObj: any) => {
               const key = `${localProduct.id}-${tallaObj.talla}`;
               const variant = variants.find((v: any) => v.public_title === tallaObj.talla || v.name?.includes(tallaObj.talla) || v.option1 === tallaObj.talla);
               
