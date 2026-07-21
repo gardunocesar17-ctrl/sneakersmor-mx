@@ -43,7 +43,7 @@ export default function ProductoPage({ params }: { params: { slug: string } }) {
       "@type": "Offer",
       priceCurrency: "MXN",
       price: producto.precio,
-      availability: producto.tallas.some((t) => t.stock > 0)
+      availability: producto.tallas.some((t: any) => t.stock > 0)
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
     },

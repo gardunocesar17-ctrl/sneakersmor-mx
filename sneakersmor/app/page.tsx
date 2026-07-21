@@ -6,10 +6,10 @@ import ReviewsCarousel from "@/components/ReviewsCarousel";
 import InstagramStrip from "@/components/InstagramStrip";
 
 export default function HomePage() {
-  const destacados = productos.filter((p) => p.destacado).slice(0, 8);
-  const nuevos = productos.filter((p) => p.nuevoIngreso).slice(0, 4);
-  const masVendidos = productos.filter((p) => p.masVendido).slice(0, 4);
-  const ofertas = productos.filter((p) => p.enOferta).slice(0, 4);
+  const destacados = productos.filter((p: any) => p.destacado).slice(0, 8);
+  const nuevos = productos.filter((p: any) => p.nuevoIngreso).slice(0, 4);
+  const masVendidos = productos.filter((p: any) => p.masVendido).slice(0, 4);
+  const ofertas = productos.filter((p: any) => p.enOferta).slice(0, 4);
 
   return (
     <>
@@ -141,7 +141,7 @@ function Grid({ productos }: { productos: typeof import("@/lib/data").productos 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
       {productos.map((p, i) => (
-        <ProductCard key={p.id} producto={p} index={i} />
+        <ProductCard key={p.id} producto={p as any} index={i} />
       ))}
     </div>
   );

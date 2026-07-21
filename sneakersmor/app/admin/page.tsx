@@ -18,7 +18,7 @@ const tabs = [
 
 export default function AdminPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("dashboard");
-  const [productos, setProductos] = useState<Product[]>(productosIniciales);
+  const [productos, setProductos] = useState<Product[]>(productosIniciales as unknown as Product[]);
   const [usuarios, setUsuarios] = useState<User[]>([]);
   const [pedidos, setPedidos] = useState<Order[]>([]);
   const [editando, setEditando] = useState<Product | null>(null);

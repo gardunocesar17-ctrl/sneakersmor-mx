@@ -1,4 +1,5 @@
-export const productos = [
+import { Product } from "./types";
+export const productos: Product[] = [
   {
     "id": "10039939694893",
     "sku": "SM-10039939694893",
@@ -47134,7 +47135,7 @@ export const productos = [
     "destacado": false,
     "nuevoIngreso": false
   }
-];
+] as Product[];
 
 export const marcas = Array.from(new Set(productos.map((p) => p.marca)));
 export const categorias = Array.from(new Set(productos.map((p) => p.categoria)));
