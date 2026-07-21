@@ -38,8 +38,7 @@ export default function AdminPage() {
       const allAirfireProducts = pages.filter(p => p && p.products).flatMap(p => p.products);
       
       const invRef = doc(db, "store", "inventory");
-      const invSnap = await getDoc(invRef);
-      const purchased = invSnap.exists() ? invSnap.data() : {};
+      const purchased: Record<string, number> = {};
       
       let actualizadosCount = 0;
       let totalRevisados = 0;
@@ -73,15 +72,13 @@ export default function AdminPage() {
 
           if (needsScraping) {
             try {
-              const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`);
+              const res = await fetch(`/api/scrape-html?slug=${localProduct.slug}`);
               if (!res.ok) return;
-              const html = await res.text();
-              const invRegex = /"(\d+)":\s*\{\s*"inventory_management"[^}]+"inventory_quantity":\s*(-?\d+)/g;
-              let invMatch;
-              const scrapedInv: Record<string, number> = {};
-              while ((invMatch = invRegex.exec(html)) !== null) {
-                scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
-              }
+              const data = await res.json();
+              if (!data.success) return;
+              
+              const scrapedInv = data.scrapedInv;
+              
               localProduct.tallas.forEach((t) => {
                 const variant = airfireProduct.variants.find((v: any) => v.title === t.talla || v.option1 === t.talla);
                 if (variant && variant.available) {
