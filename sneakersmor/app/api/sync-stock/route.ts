@@ -19,8 +19,8 @@ export async function GET(request: Request) {
 
     let actualizadosCount = 0;
     
-    // Obtener TODAS las páginas en paralelo (SUPER RÁPIDO)
-    const pagePromises = Array.from({ length: 20 }, (_, i) => i + 1).map(page => 
+    // Obtener TODAS las páginas (Airfire solo tiene ~480 productos, así que con 3 páginas de 250 es suficiente)
+    const pagePromises = Array.from({ length: 3 }, (_, i) => i + 1).map(page => 
       fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`, { cache: 'no-store' })
         .then(res => res.ok ? res.json() : null)
         .catch(() => null)
