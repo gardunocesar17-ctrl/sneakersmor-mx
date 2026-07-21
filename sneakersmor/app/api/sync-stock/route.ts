@@ -29,7 +29,7 @@ export async function GET() {
 
     // Identificamos qué productos de Airfire realmente están disponibles (stock > 0)
     // Para no hacer web scraping innecesario.
-    const productsToScrape = [];
+    const productsToScrape: any[] = [];
     
     // Primero, cruzamos el catálogo rápido
     productos.forEach(localProduct => {
