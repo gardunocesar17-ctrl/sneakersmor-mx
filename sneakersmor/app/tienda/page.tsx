@@ -229,18 +229,28 @@ function TiendaContenido() {
                   Talla {acTalla ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                 </button>
                 {acTalla && (
-                  <div className="mt-4 space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar pl-2">
-                    {tallasDisponibles.map((t) => (
-                      <label key={t} className="flex items-center gap-3 text-sm cursor-pointer text-ink/70 dark:text-chalk/70 hover:text-ember">
-                        <input
-                          type="checkbox"
-                          checked={tallaSel === t}
-                          onChange={() => setTallaSel(tallaSel === t ? "" : t)}
-                          className="accent-ember w-4 h-4"
-                        />
-                        {t} ({countPorTalla[t] || 0})
-                      </label>
-                    ))}
+                  <div className="mt-4 grid grid-cols-4 gap-2">
+                    {tallasDisponibles.map((t) => {
+                      const count = countPorTalla[t] || 0;
+                      const isDisabled = count === 0;
+                      return (
+                        <button
+                          key={t}
+                          disabled={isDisabled}
+                          onClick={() => setTallaSel(tallaSel === t ? "" : t)}
+                          title={`${count} disponibles`}
+                          className={`border px-1 py-2 text-xs font-mono transition-colors ${
+                            tallaSel === t 
+                              ? "bg-ember text-chalk border-ember" 
+                              : isDisabled 
+                                ? "border-ink/5 dark:border-chalk/5 text-ink/30 dark:text-chalk/30 line-through cursor-not-allowed" 
+                                : "border-ink/15 dark:border-chalk/15 hover:border-ember text-ink/70 dark:text-chalk/70"
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

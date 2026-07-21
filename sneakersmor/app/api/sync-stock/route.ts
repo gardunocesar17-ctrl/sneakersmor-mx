@@ -5,65 +5,84 @@ import { productos } from '@/lib/data';
 
 export async function GET() {
   try {
-    let allAirfireProducts: any[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    // Obtenemos los productos del proveedor (Airfire) usando la API oculta de Shopify
-    while (hasMore) {
-      const res = await fetch(`https://airfire.com.mx/products.json?limit=250&page=${page}`);
-      const data = await res.json();
-      if (data.products && data.products.length > 0) {
-        allAirfireProducts = [...allAirfireProducts, ...data.products];
-        page++;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    // Obtenemos nuestro inventario actual de Firebase
     const invRef = doc(db, "store", "inventory");
     const invSnap = await getDoc(invRef);
     const purchased = invSnap.exists() ? invSnap.data() : {};
 
-    let agotadosCount = 0;
+    let actualizadosCount = 0;
 
-    // Comparamos nuestro catálogo local con el del proveedor
-    productos.forEach(localProduct => {
-      const airfireProduct = allAirfireProducts.find((p: any) => p.handle === localProduct.slug);
+    // Procesamos en lotes de 5 para no saturar ni hacer timeout rápido
+    const chunkSize = 5;
+    for (let i = 0; i < productos.length; i += chunkSize) {
+      const chunk = productos.slice(i, i + chunkSize);
       
-      localProduct.tallas.forEach(tallaObj => {
-        const key = `${localProduct.id}-${tallaObj.talla}`;
-        
-        if (airfireProduct) {
-          const variant = airfireProduct.variants.find(
-            (v: any) => v.title === tallaObj.talla || v.option1 === tallaObj.talla
-          );
-          
-          if (!variant || !variant.available) {
-            // El proveedor ya NO tiene esta talla disponible.
-            // Marcamos como agotado en nuestra tienda igualando "purchased" al stock original
-            purchased[key] = tallaObj.stock; 
-            agotadosCount++;
+      await Promise.all(chunk.map(async (localProduct) => {
+        try {
+          const res = await fetch(`https://airfire.com.mx/products/${localProduct.slug}`);
+          if (!res.ok) {
+            // Si el producto ya no existe en la página, ponemos todo en stock 0
+            localProduct.tallas.forEach(t => {
+              purchased[`${localProduct.id}-${t.talla}`] = t.stock;
+              actualizadosCount++;
+            });
+            return;
           }
-          // Si SÍ está disponible en el proveedor, no hacemos nada.
-          // Dejamos que nuestro contador de 'purchased' local siga funcionando normal.
-        } else {
-          // El modelo completo fue eliminado de la página del proveedor
-          purchased[key] = tallaObj.stock;
-          agotadosCount++;
-        }
-      });
-    });
+          const html = await res.text();
+          
+          // Extraer cantidades exactas del HTML usando Regex sobre window.inventories
+          // formato esperado en HTML de Shopify: "id_variante": {"inventory_quantity": 2}
+          const exactQuantities: Record<string, number> = {};
+          
+          // Primero buscamos el objeto meta de la variante para saber los IDs y títulos
+          const metaMatch = html.match(/var meta = (\{.*?\});/s);
+          if (metaMatch) {
+            const meta = JSON.parse(metaMatch[1]);
+            const variants = meta.product?.variants || [];
+            
+            // Luego buscamos las cantidades de inventario en todo el HTML
+            const invRegex = /"(\d+)":\s*\{\s*"inventory_management"[^}]+"inventory_quantity":\s*(-?\d+)/g;
+            let invMatch;
+            const scrapedInv: Record<string, number> = {};
+            while ((invMatch = invRegex.exec(html)) !== null) {
+              scrapedInv[invMatch[1]] = parseInt(invMatch[2]);
+            }
 
-    // Guardamos la actualización en Firebase
+            localProduct.tallas.forEach(tallaObj => {
+              const key = `${localProduct.id}-${tallaObj.talla}`;
+              
+              // Buscar el ID de la variante que corresponde a esta talla
+              const variant = variants.find((v: any) => v.public_title === tallaObj.talla || v.name?.includes(tallaObj.talla) || v.option1 === tallaObj.talla);
+              
+              if (variant) {
+                const exactStock = scrapedInv[variant.id] !== undefined ? scrapedInv[variant.id] : (variant.inventory_quantity || 0);
+                // Si el stock exacto es menor a 0 (ej. sobrevendido), lo tratamos como 0
+                const safeStock = Math.max(0, exactStock);
+                
+                // Calculamos el offset (purchased) para que la tienda muestre exactamente safeStock
+                // La fórmula es: stock_real = stock_original - purchased
+                // Por lo tanto: purchased = stock_original - stock_real
+                purchased[key] = tallaObj.stock - safeStock;
+                actualizadosCount++;
+              } else {
+                // Variante no encontrada en Airfire, marcamos como agotado
+                purchased[key] = tallaObj.stock;
+                actualizadosCount++;
+              }
+            });
+          }
+        } catch (e) {
+          console.error(`Error procesando ${localProduct.slug}:`, e);
+        }
+      }));
+    }
+
     await setDoc(invRef, purchased);
 
     return NextResponse.json({ 
       success: true, 
       message: "Inventario sincronizado con éxito",
       productosRevisados: productos.length,
-      variantesAgotadasPorProveedor: agotadosCount
+      variantesSincronizadas: actualizadosCount
     });
   } catch (error: any) {
     console.error("Error sincronizando stock:", error);
