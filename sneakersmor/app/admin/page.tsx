@@ -27,17 +27,36 @@ export default function AdminPage() {
 
   const sincronizarStock = async () => {
     setSincronizando(true);
-    try {
-      const res = await fetch("/api/sync-stock");
-      const data = await res.json();
-      if (data.success) {
-        alert(`¡Sincronización exitosa!\n\nModelos revisados: ${data.productosRevisados}\nTallas agotadas por el proveedor: ${data.variantesAgotadasPorProveedor}`);
-      } else {
-        alert("Error al sincronizar: " + data.error);
+    let offset = 0;
+    let totalRevisados = 0;
+    let totalAgotadas = 0;
+    
+    while(true) {
+      try {
+        const res = await fetch(`/api/sync-stock?offset=${offset}`);
+        const data = await res.json();
+        
+        if (data.success) {
+          totalRevisados += data.productosRevisados;
+          totalAgotadas += data.variantesAgotadasPorProveedor; // Note: This includes unavailable sizes from the whole DB on every pass, but that's fine for the alert.
+          
+          if (data.isFinished) {
+            break;
+          }
+          offset = data.nextOffset;
+        } else {
+          alert("Error al sincronizar: " + data.error);
+          setSincronizando(false);
+          return;
+        }
+      } catch (e) {
+        alert("Error de conexión al sincronizar.");
+        setSincronizando(false);
+        return;
       }
-    } catch (e) {
-      alert("Error de conexión al sincronizar.");
     }
+    
+    alert(`¡Sincronización exitosa!\n\nModelos revisados: ${totalRevisados}\nTallas agotadas por el proveedor actualizadas en BD.`);
     setSincronizando(false);
   };
 
